@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package monitor;
+
+message MonitorData {
+  string time = 1;
+  string hostname = 2;
+
+  string metric = 3;
+  string value = 4;
+}
+
+message CommandRequest {
+  string command = 1;            // server → client
+  string description = 2;         // giải thích lệnh
+}
+
+message CommandResponse {
+  MonitorData data = 1;           // client → server
+  string exec_output = 2;         // output thực thi command
+}
+
+service MonitorService {
+  rpc CommandStream (stream CommandResponse) returns (stream CommandRequest);
+}

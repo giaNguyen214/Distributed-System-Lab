@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: monitor-worker
+spec:
+  selector:
+    matchLabels:
+      app: monitor-worker
+  template:
+    metadata:
+      labels:
+        app: monitor-worker
+    spec:
+      # -------------------------------------------
+      # Đảm bảo client.py CHỈ chạy trên worker1 và worker2.
+      # Master KHÔNG có label worker=true → sẽ không chạy client.
+      # -------------------------------------------
+      nodeSelector:
+        node-role.kubernetes.io/worker: "true"
+
+      containers:
+      - name: monitor-worker
+        image: roy214/monitor-client:v1
+        env:
+        - name: MASTER_ADDR
+          value: "monitor-server-service:50051"

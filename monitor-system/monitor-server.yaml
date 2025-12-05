@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monitor-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: monitor-server
+  template:
+    metadata:
+      labels:
+        app: monitor-server
+    spec:
+      # ÉP server phải chạy trên node master (nodeSelector)
+      nodeSelector:
+        monitor: server
+
+      # Cho phép chạy trên master dù master có taint control-plane
+      tolerations:
+      - operator: "Exists"
+
+      containers:
+      - name: monitor-server
+        image: roy214/monitor-server:v1
+        ports:
+        - containerPort: 50051
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: monitor-server-service
+spec:
+  selector:
+    app: monitor-server
+  ports:
+  - port: 50051
+    targetPort: 50051
+    protocol: TCP
+
