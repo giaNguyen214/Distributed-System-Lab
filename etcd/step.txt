@@ -1,0 +1,94 @@
+# Master
+ubuntu@master:~$ mkdir etcd
+ubuntu@master:~$ cd etcd
+
+ubuntu@master:~/etcd$ nano etcd.yaml
+ubuntu@master:~/etcd$ cd ..
+ubuntu@master:~$ kubectl apply -f etcd/etcd.yaml
+ubuntu@master:~$ kubectl -n etcd get pods -o wide
+ubuntu@master:~$ kubectl -n etcd get pvcubuntu@master:~$ kubectl -n etcd exec etcd-0 -- etcdctl version
+ubuntu@master:~$ kubectl -n etcd exec etcd-0 -- /usr/local/bin/etcdctl version
+ubuntu@master:~$ kubectl -n etcd exec etcd-0 -- etcdctl --endpoints=http://127.0.0.1:2379 member list -w table
+
+ubuntu@master:~/etcd$ nano monitor_heartbeat.py
+ubuntu@master:~/etcd$ chmod +x setup_config.sh
+ubuntu@master:~/etcd$ ./setup_config.sh
+Kết quả chạy setup
+[Setup] Configuring etcd for monitoring system...
+[Setup] etcd endpoint: 127.0.0.1:2379
+[Warning] etcdctl not found. Will try to use kubectl exec if in Kubernetes cluster
+[Config] Setting /monitor/config/worker1 = {"interval": 10, "metrics": ["cpu", "memory", "disk"]}
+OK
+[Config] Setting /monitor/config/worker2 = {"interval": 10, "metrics": ["cpu", "memory", "disk"]}
+OK
+[Config] Setting /monitor/config/master = {"interval": 10, "metrics": ["cpu", "memory", "disk"]}
+OK
+[Setup] Config setup complete!
+
+[Info] To test dynamic config update, run:
+  kubectl -n etcd exec etcd-0 -- etcdctl --endpoints=http://127.0.0.1:2379 put /monitor/config/worker1 '{"interval": 2, "metrics": ["cpu", "memory"]}'
+
+[Info] To view all monitor config keys:
+  kubectl -n etcd exec etcd-0 -- etcdctl --endpoints=http://127.0.0.1:2379 get --prefix /monitor/config
+
+
+ubuntu@master:~/etcd$ ./run_server.sh
+-bash: ./run_server.sh: Permission denied
+ubuntu@master:~/etcd$ chmod +x run_server.sh
+ubuntu@master:~/etcd$ ./run_server.sh
+
+
+ubuntu@master:~/etcd$ python3 -m venv ~/etcd_venv
+source ~/etcd_venv/bin/activate
+pip install etcd3==0.12.0
+
+(etcd_venv) ubuntu@master:~$ kubectl -n etcd run monitor-shell --image=python:3.12-slim --restart=Never -- sleep 3600
+pod/monitor-shell created
+
+ubuntu@master:~$ cd etcd
+ubuntu@master:~/etcd$ nano requirements.txt
+ubuntu@master:~/etcd$ cd ..
+ubuntu@master:~$ kubectl -n etcd cp ./etcd/. monitor-shell:/monitor
+ubuntu@master:~$ kubectl -n etcd exec -it monitor-shell -- /bin/sh
+# cd /monitor
+# pip install -r requirements.txt
+# ETCD_HOST=etcd-0.etcd-service.etcd.svc.cluster.local ETCD_PORT=2379 python /monitor/monitor_heartbeat.py
+
+
+Trên Master, setup nodeport để allow worker connect tới
+ubuntu@master:~$ cd etcd
+ubuntu@master:~/etcd$ nano etcd-nodeport.yaml
+ubuntu@master:~$ cd etcd
+ubuntu@master:~/etcd$ nano etcd-nodeport.yaml
+ubuntu@master:~/etcd$ kubectl apply -f ./etcd-nodeport.yaml
+service/etcd-nodeport created
+ubuntu@master:~$ kubectl -n etcd get svc etcd-nodeport -o wide
+NAME            TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE   SELECTOR
+etcd-nodeport   NodePort   10.97.170.196   <none>        2379:32379/TCP   7s    app=etcd
+
+### Tại Worker
+
+ubuntu@worker1:~$ mkdir etcd
+ubuntu@worker1:~$ ls -a
+.              .bashrc  .profile                   monitor-worker.yaml
+..             .cache   .ssh
+.bash_history  .config  .sudo_as_admin_successful
+.bash_logout   .local   etcd
+ubuntu@worker1:~$ cd etcd
+ubuntu@worker1:~/etcd$ nano heartbeat.py
+ubuntu@worker1:~/etcd$ nano load_json_config.py
+ubuntu@worker1:~/etcd$ nano run_agent.sh
+ubuntu@worker1:~/etcd$ chmod +x run_agent.sh
+ubuntu@worker1:~/etcd$ ls -a
+.  ..  heartbeat.py  load_json_config.py  run_agent.sh
+ubuntu@worker1:~/etcd$ nano requirements.txt
+ubuntu@worker1:~/etcd$ sudo apt install python3.12-venv
+ubuntu@worker1:~/etcd$ python3 -m venv ~/etcd_venv
+ubuntu@worker1:~/etcd$ source ~/etcd_venv/bin/activate
+(etcd_venv) ubuntu@worker1:~/etcd$ pip install --upgrade pip
+(etcd_venv) ubuntu@worker1:~/etcd$ nc -vz 172.31.12.78 2379
+Connection to 172.31.12.78 2379 port [tcp/*] succeeded!
+(etcd_venv) ubuntu@worker1:~/etcd$
+export ETCD_HOST=172.31.12.78
+export ETCD_PORT=32379
+NODE_NAME=worker1 ETCD_HOST=$ETCD_HOST ETCD_PORT=$ETCD_PORT ./run_agent.sh

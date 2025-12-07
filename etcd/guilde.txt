@@ -1,0 +1,81 @@
+1. Triển khai etcd lên Kubernetes Cluster
+Bạn cần dựng cơ sở dữ liệu etcd để làm nơi lưu trữ cấu hình và trạng thái của các node.
+
+Hành động: Sử dụng nội dung file YAML (từ trang 1-2 của tài liệu) để deploy etcd.
+
+Tạo namespace etcd.
+
+Tạo Headless Service etcd-service.
+
+Tạo StatefulSet etcd.
+
+
+Lưu ý cấu hình: File mẫu đang để replicas: 1. Vì bạn có 1 master và 2 workers, bạn có thể giữ nguyên 1 replica để test cho đơn giản, hoặc tăng lên 3 để tạo cluster etcd thực thụ (nhưng cần sửa tham số --initial-cluster trong command).
+
+
+Kiểm tra: Sau khi deploy, dùng lệnh kiểm tra để chắc chắn etcd đã chạy:
+
+Bash
+
+kubectl exec -it etcd-0 -n etcd -- etcdctl member list -w table
+Kết quả phải hiện trạng thái "started" .
+
+2. Lập trình phần "Agent" (Chạy trên các Worker Node)
+Bạn cần viết (hoặc sửa) script Python giám sát (monitoring agent) để chạy trên các máy Worker. Script này phải thực hiện 3 nhiệm vụ song song:
+
+Nhiệm vụ 1: Gửi Heartbeat (Báo cáo "Tôi còn sống")
+
+Định kỳ gửi tín hiệu đến etcd với key theo định dạng: /monitor/heartbeat/<HOSTNAME>.
+
+Sử dụng cơ chế Lease (TTL). Nếu node chết, lease hết hạn thì key này sẽ tự động bị xóa khỏi etcd, giúp server biết node đã chết .
+
+Nhiệm vụ 2: Dynamic Configuration (Cập nhật cấu hình động)
+
+Agent phải lắng nghe (watch) sự thay đổi tại key: /monitor/config/<HOSTNAME>.
+
+Khi bạn thay đổi cấu hình trên etcd (ví dụ: đổi thời gian interval lấy mẫu từ 10s xuống 5s), Agent phải nhận được ngay lập tức và áp dụng mà không cần khởi động lại.
+
+
+Cấu trúc config (JSON): Phải bao gồm interval và danh sách metrics (ví dụ: cpu, memory, disk...) .
+
+Nhiệm vụ 3: Thu thập dữ liệu & Đồng bộ luồng
+
+Agent vẫn thực hiện thu thập dữ liệu tài nguyên (CPU, RAM...) như các lab trước.
+
+
+Quan trọng: Vì cấu hình (config) được cập nhật động từ luồng (thread) lắng nghe etcd, trong khi luồng thu thập dữ liệu đang chạy, bạn phải dùng cơ chế khóa Reader-Writer Lock để tránh xung đột dữ liệu khi truy cập biến cấu hình.
+
+3. Lập trình phần "Server" (Chạy trên Master hoặc máy quản lý)
+Bạn cần viết một script Python đóng vai trò quản lý trung tâm.
+
+Chức năng 1: Giám sát toàn cục
+
+Sử dụng watch_prefix để theo dõi tất cả các key trong thư mục /monitor/heartbeat/.
+
+Hiển thị danh sách các node đang "Alive" hoặc phát hiện ngay khi một node bị "Dead" (khi sự kiện DeleteEvent xảy ra do hết TTL) .
+
+
+Chức năng 2: Đẩy cấu hình (Admin Tool)
+
+Viết đoạn code hoặc dùng lệnh etcdctl để đẩy cấu hình JSON lên key /monitor/config/<tên-node>. Đây là cách để bạn demo tính năng cập nhật cấu hình động.
+
+4. Kịch bản Demo (Để báo cáo)
+Bài này không yêu cầu nộp báo cáo giấy, chỉ cần demo kỹ thuật. Bạn cần chuẩn bị kịch bản như sau:
+
+Bật Server theo dõi -> Thấy chưa có node nào.
+
+Bật Agent trên Worker 1 -> Server báo "Node Worker 1 Alive".
+
+Test Config:
+
+Agent đang chạy với interval 10s.
+
+Từ Server, đẩy config mới (interval = 2s) lên etcd.
+
+Agent trên Worker 1 phải lập tức in ra log là đã nhận config mới và tốc độ in log nhanh hơn (2s/lần).
+
+Test Heartbeat:
+
+Tắt nóng (kill process) Agent trên Worker 1.
+
+Sau vài giây (hết TTL), Server phải báo "Node Worker 1 Dead".
