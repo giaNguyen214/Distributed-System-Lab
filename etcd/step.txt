@@ -1,4 +1,5 @@
 # Master
+ssh -i "D:\Projects\School\HPB\lamnguyen14072004.pem" ubuntu@13.214.186.221
 ubuntu@master:~$ mkdir etcd
 ubuntu@master:~$ cd etcd
 
@@ -6,7 +7,8 @@ ubuntu@master:~/etcd$ nano etcd.yaml
 ubuntu@master:~/etcd$ cd ..
 ubuntu@master:~$ kubectl apply -f etcd/etcd.yaml
 ubuntu@master:~$ kubectl -n etcd get pods -o wide
-ubuntu@master:~$ kubectl -n etcd get pvcubuntu@master:~$ kubectl -n etcd exec etcd-0 -- etcdctl version
+ubuntu@master:~$ kubectl -n etcd get pvc
+ubuntu@master:~$ kubectl -n etcd exec etcd-0 -- etcdctl version
 ubuntu@master:~$ kubectl -n etcd exec etcd-0 -- /usr/local/bin/etcdctl version
 ubuntu@master:~$ kubectl -n etcd exec etcd-0 -- etcdctl --endpoints=http://127.0.0.1:2379 member list -w table
 
@@ -66,14 +68,21 @@ ubuntu@master:~$ kubectl -n etcd get svc etcd-nodeport -o wide
 NAME            TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE   SELECTOR
 etcd-nodeport   NodePort   10.97.170.196   <none>        2379:32379/TCP   7s    app=etcd
 
+## Chạy trên master
+## Do pod tạo chỉ sống được 1 tiếng nên phải tạo pod mới rồi copy lại founder etcd vào folder pod
+kubectl -n etcd delete pod monitor-shell --ignore-not-found
+kubectl -n etcd run monitor-shell --image=python:3.12-slim --restart=Never -- sleep 3600
+kubectl -n etcd cp ./etcd/. monitor-shell:/monitor
+ubuntu@master:~$ kubectl -n etcd exec -it monitor-shell -- /bin/sh
+# cd /monitor
+# pip install -r requirements.txt
+# ETCD_HOST=etcd-0.etcd-service.etcd.svc.cluster.local ETCD_PORT=2379 python /monitor/monitor_heartbeat.py
+
+
 ### Tại Worker
+ssh -i "D:\Projects\School\HPB\lamnguyen14072004.pem" ubuntu@13.250.231.37
 
 ubuntu@worker1:~$ mkdir etcd
-ubuntu@worker1:~$ ls -a
-.              .bashrc  .profile                   monitor-worker.yaml
-..             .cache   .ssh
-.bash_history  .config  .sudo_as_admin_successful
-.bash_logout   .local   etcd
 ubuntu@worker1:~$ cd etcd
 ubuntu@worker1:~/etcd$ nano heartbeat.py
 ubuntu@worker1:~/etcd$ nano load_json_config.py
