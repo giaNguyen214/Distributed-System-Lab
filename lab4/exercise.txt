@@ -1,0 +1,14 @@
+Students are required to develop a monitoring tool that comprises a centralized
+server and multiple monitoring agents by integrating all labs. The overall system architecture and data flow of the monitoring tool are illustrated in Figure 1, where:
+• Each monitor agent collects data from its localhost then sends to the centralized
+server, and also listens for commands from the server both through gRPC.
+• Each monitor agent reads and updates its configuration in real time from etcd. The
+configuration format should follow the structure shown in Listing 2.
+• Students are encouraged to implement various plugins. A typical example is that
+monitor agent can prevent data transmission when the new collected data is identical to the previously sent data, thereby reducing network bandwidth usage.
+• The centralized server (gRPC server), after receiving monitoring data, forwards it
+to Kafka for downstream processing and vice versa. gRPC server takes role as a
+broker that transmits data and control signals between Kafka and monitor agents.
+• The analysis application reads data from Kafka (produced by the gRPC server),
+then print it to stdout. The analysis application also sends commands to Kafka,
+which are then forwarded by the gRPC server to the respective agents for execution (dummy commands are enough for demonstration).
